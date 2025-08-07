@@ -1,122 +1,66 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tetris Mobile</title>
-  <style>
-    :root {
-      --bg-main:#0f1724;
-      --accent:#00b2ff;
-      --text:#e0e6f0;
-      --grid:#39516f;
-      --hud-h:52px;          /* status‑bar height */
-      --btn-size:78px;       /* on‑screen button size */
-    }
-    *{box-sizing:border-box;margin:0;-webkit-user-select:none;user-select:none;}
-    body{height:100vh;background:var(--bg-main);display:flex;flex-direction:column;align-items:center;color:var(--text);font-family:system-ui,sans-serif;touch-action:manipulation;}
-
-    /* ---------- HUD ---------- */
-    .hud{height:var(--hud-h);width:100%;max-width:720px;padding:0 .8rem;display:flex;justify-content:space-between;align-items:center;background:#111d2e;box-shadow:0 2px 6px #0008;font-weight:600;font-size:1.15rem;letter-spacing:.4px;}
-    .hud span{flex:1;text-align:center;color:var(--accent);}  /* label */
-    .hud strong{color:#fff;margin-left:.25rem;}
-
-    /* ---------- playfield ---------- */
-    #playfield{flex:1;width:100%;max-width:720px;background:#000a14;border:4px solid #000c18;border-top:none;box-shadow:0 4px 14px #000a;touch-action:none;}
-
-    /* ---------- controls ---------- */
-    .ctrl-btn{position:absolute;bottom:20px;border:none;border-radius:50%;width:var(--btn-size);height:var(--btn-size);font-size:2rem;font-weight:800;color:#fff;background:var(--accent);box-shadow:0 5px 14px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;}
-    .ctrl-btn:active{filter:brightness(.9);}  
-    #btnDown{left:18px;}      /* soft‑drop (hold) */
-    #btnRotate{right:18px;}    /* rotate */
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tetris Mobile</title>
+<style>
+:root{--bg:#0f1724;--accent:#00b2ff;--text:#e0e6f0;--grid:#425a7c;--hud:56px;--btn:80px}
+*{box-sizing:border-box;margin:0;-webkit-user-select:none;user-select:none;touch-action:manipulation;font-family:system-ui,sans-serif}
+body{height:100vh;background:var(--bg);color:var(--text);display:flex;flex-direction:column;align-items:center}
+.hud{height:var(--hud);width:100%;max-width:720px;padding:0 .8rem;display:flex;justify-content:space-between;align-items:center;background:#111d2e;box-shadow:0 2px 6px #0008;font-weight:600;font-size:1.2rem;z-index:5}
+.hud span{flex:1;text-align:center;color:var(--accent)}
+.hud strong{color:#fff;margin-left:.25rem}
+#wrapper{position:relative;flex:1;width:100%;max-width:720px}
+canvas{background:#000a14;border:4px solid #000c18;border-top:none;box-shadow:0 4px 14px #000a;display:block}
+#overlay{position:absolute;inset:0;background:#000a14d9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.3rem;color:#fff;font-weight:700;visibility:hidden;text-align:center}
+#overlay h2{font-size:2.1rem;color:var(--accent)}
+#overlay button{background:var(--accent);border:none;border-radius:10px;padding:1rem 2.2rem;font-size:1.1rem;color:#fff;box-shadow:0 4px 12px #000a}
+.ctrl-btn{position:absolute;bottom:24px;border:none;border-radius:50%;width:var(--btn);height:var(--btn);font-size:2.1rem;font-weight:800;color:#fff;background:var(--accent);box-shadow:0 5px 14px #000a;display:flex;align-items:center;justify-content:center;z-index:5}
+.ctrl-btn:active{filter:brightness(.9)}
+#btnDown{left:20px}
+#btnRot{right:20px}
+</style>
 </head>
 <body>
-  <div class="hud">
-    <span>Score<strong id="score">0</strong></span>
-    <span>Level<strong id="level">1</strong></span>
-    <span>Lines<strong id="lines">0</strong></span>
-  </div>
-
-  <canvas id="playfield"></canvas>
-  <button id="btnDown"   class="ctrl-btn">↓</button>
-  <button id="btnRotate" class="ctrl-btn">⟳</button>
-
+<div class="hud"><span>Score<strong id="score">0</strong></span><span>Level<strong id="level">1</strong></span><span>Lines<strong id="lines">0</strong></span></div>
+<div id="wrapper"><canvas id="pf"></canvas><div id="overlay"><h2>Game Over</h2><button id="restart">Tap to Restart</button></div></div>
+<button id="btnDown" class="ctrl-btn">↓</button><button id="btnRot" class="ctrl-btn" title="Rotate">⟳</button>
 <script>
-/*****************  CONSTANTS  *****************/
-const W=12, H=20, COLORS=[null,'#FF7F00','#00C2FF','#19FF6C','#AD0DFF','#FF3B70','#FFE600','#3975FF'];
-const BASE=600, MIN=60, STEP=60; // drop speeds (ms)
-
-/*****************  CANVAS  *****************/
-const canvas=document.getElementById('playfield'), ctx=canvas.getContext('2d');
-let BLOCK=30;        // dynamic cell size
-function fitBoard(){
-  BLOCK=Math.floor(innerWidth/W);
-  BLOCK=Math.max(BLOCK,14); // ensure visibility
-  canvas.width=W*BLOCK;
-  canvas.height=H*BLOCK;
-  ctx.setTransform(BLOCK,0,0,BLOCK,0,0);
-  draw();
-}
-addEventListener('resize',fitBoard);
-
-/*****************  HELPERS  *****************/
-const newMatrix=(w,h)=>Array.from({length:h},()=>Array(w).fill(0));
-const randType=_=>'ILJOTSZ'[Math.random()*7|0];
-const templates={T:[[0,0,0],[1,1,1],[0,1,0]],O:[[2,2],[2,2]],L:[[0,3,0],[0,3,0],[0,3,3]],J:[[0,4,0],[0,4,0],[4,4,0]],I:[[0,5,0,0],[0,5,0,0],[0,5,0,0],[0,5,0,0]],S:[[0,6,6],[6,6,0],[0,0,0]],Z:[[7,7,0],[0,7,7],[0,0,0]]};
+const W=12,H=20,COL=[null,'#ff7f00','#00c2ff','#19ff6c','#ad0dff','#ff3b70','#ffe600','#3975ff'];
+const BASE=600,MIN=60,STEP=60; // speed table
+const cvs=document.getElementById('pf'),ctx=cvs.getContext('2d');
+let BLK=30;
+function fit(){BLK=Math.max(Math.floor(innerWidth/W),14);const usableH=innerHeight-parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hud'))-110;BLK=Math.min(BLK,Math.floor(usableH/H));cvs.width=W*BLK;cvs.height=H*BLK;ctx.setTransform(BLK,0,0,BLK,0,0);draw();}
+addEventListener('resize',fit);
+const mat=(w,h)=>Array.from({length:h},()=>Array(w).fill(0));
+const rnd=()=>"ILJOTSZ"[Math.random()*7|0];
+const tpl={T:[[0,0,0],[1,1,1],[0,1,0]],O:[[2,2],[2,2]],L:[[0,3,0],[0,3,0],[0,3,3]],J:[[0,4,0],[0,4,0],[4,4,0]],I:[[0,5,0,0],[0,5,0,0],[0,5,0,0],[0,5,0,0]],S:[[0,6,6],[6,6,0],[0,0,0]],Z:[[7,7,0],[0,7,7],[0,0,0]]};
 const clone=m=>m.map(r=>r.slice());
-
-/*****************  GAME STATE  *****************/
-const arena=newMatrix(W,H);
+const arena=mat(W,H);
 const player={pos:{x:0,y:0},matrix:null,score:0,lines:0,level:1};
-let next=clone(templates[randType()]);
-
-/*****************  CORE LOGIC  *****************/
-function collide(){ for(let y=0;y<player.matrix.length;y++) for(let x=0;x<player.matrix[y].length;x++) if(player.matrix[y][x]){
-  const px=x+player.pos.x, py=y+player.pos.y;
-  if(px<0||px>=W||py>=H|| arena[py][px]) return true; } return false; }
-function merge(){ player.matrix.forEach((r,y)=>r.forEach((v,x)=>{ if(v) arena[y+player.pos.y][x+player.pos.x]=v; })); }
-function rotate(mat){ for(let y=0;y<mat.length;y++) for(let x=0;x<y;x++) [mat[x][y],mat[y][x]]=[mat[y][x],mat[x][y]]; mat.forEach(r=>r.reverse()); if(collide()) mat.forEach(r=>r.reverse()); }
-function sweep(){ let rows=0; outer:for(let y=H-1;y>=0;--y){ for(let x=0;x<W;++x){ if(!arena[y][x]) continue outer; } arena.splice(y,1); arena.unshift(Array(W).fill(0)); rows++; ++y; }
-  if(rows){ player.lines+=rows; player.score+=rows*10; player.level=Math.floor(player.lines/4)+1; interval=Math.max(MIN, BASE-(player.level-1)*STEP); }
-}
-function spawn(){ player.matrix=next; next=clone(templates[randType()]); player.pos.y=0; player.pos.x=(W>>1)-(player.matrix[0].length>>1); if(collide()) reset(); }
-function reset(){ arena.forEach(r=>r.fill(0)); Object.assign(player,{score:0,lines:0,level:1}); interval=BASE; }
-
-/*****************  DRAWING  *****************/
-function drawCellGrid(){ ctx.lineWidth=0.04; ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--grid'); for(let y=0;y<H;y++) for(let x=0;x<W;x++){ ctx.strokeRect(x, y, 1,1); } }
-function drawMatrix(m,o){ m.forEach((r,y)=>r.forEach((v,x)=>{ if(v){ ctx.fillStyle=COLORS[v]; ctx.fillRect(o.x+x, o.y+y,1,1); ctx.lineWidth=0.05; ctx.strokeStyle='#000'; ctx.strokeRect(o.x+x, o.y+y,1,1); } })); }
-function draw(){ ctx.fillStyle='#000a14'; ctx.fillRect(0,0,canvas.width,canvas.height); drawCellGrid(); drawMatrix(arena,{x:0,y:0}); if(player.matrix) drawMatrix(player.matrix,player.pos); }
-
-/*****************  LOOP  *****************/
-let dropCounter=0, last=0, interval=BASE, fast=false;
-function update(t=0){ const dt=t-last; last=t; dropCounter+=dt; if(dropCounter>(fast?80:interval)){ player.pos.y++; if(collide()){ player.pos.y--; merge(); sweep(); spawn(); } dropCounter=0; }
-  draw(); requestAnimationFrame(update); }
-
-/*****************  INPUT  *****************/
-// Keyboard (desktop testing)
-addEventListener('keydown',e=>{ if(e.repeat)return; switch(e.code){ case'ArrowLeft': move(-1); break; case'ArrowRight': move(1); break; case'ArrowDown': fast=true; break; case'Space': rotate(player.matrix); break; }});
-addEventListener('keyup',e=>{ if(e.code==='ArrowDown') fast=false; });
-function move(dir){ player.pos.x+=dir; if(collide()) player.pos.x-=dir; }
-
-// Button controls
-const btnDown=document.getElementById('btnDown'); const btnRot=document.getElementById('btnRotate');
-btnDown.addEventListener('pointerdown',()=>fast=true);
-['pointerup','pointerleave','pointercancel'].forEach(ev=>btnDown.addEventListener(ev,()=>fast=false));
-btnRot.addEventListener('pointerdown',()=>rotate(player.matrix));
-
-// Improved swipe: continuous drag
-let dragStart=null;
-canvas.addEventListener('touchstart',e=>{dragStart=e.touches[0].clientX;});
-canvas.addEventListener('touchmove',e=>{ if(dragStart===null) return; const cx=e.touches[0].clientX; const dx=cx-dragStart; if(Math.abs(dx) > BLOCK*0.6){ const steps=Math.round(dx/BLOCK); move(steps); dragStart=cx; } });
-canvas.addEventListener('touchend',e=>{ const t=e.changedTouches[0]; const dx=t.clientX-dragStart; const dy=t.clientY-e.changedTouches[0].clientY; if(Math.abs(dx)<10&&Math.abs(dy)<10) rotate(player.matrix); dragStart=null; });
-
-/*****************  HUD  *****************/
-setInterval(()=>{ document.getElementById('score').textContent=player.score; document.getElementById('level').textContent=player.level; document.getElementById('lines').textContent=player.lines; },150);
-
-/*****************  INIT  *****************/
-fitBoard(); spawn(); update();
+let next=clone(tpl[rnd()]);
+let over=false,fast=false,interval=BASE,drop=0,last=0;
+function collide(){for(let y=0;y<player.matrix.length;y++)for(let x=0;x<player.matrix[y].length;x++)if(player.matrix[y][x]){const px=x+player.pos.x,py=y+player.pos.y;if(px<0||px>=W||py>=H||arena[py][px])return true;}return false;}
+function merge(){player.matrix.forEach((r,y)=>r.forEach((v,x)=>{if(v)arena[y+player.pos.y][x+player.pos.x]=v;}));}
+function rotate(mat){for(let y=0;y<mat.length;y++)for(let x=0;x<y;x++) [mat[x][y],mat[y][x]]=[mat[y][x],mat[x][y]];mat.forEach(r=>r.reverse());if(collide()){ // wall-kick 1 cell
+player.pos.x+=player.pos.x<W/2?1:-1;if(collide()){mat.forEach(r=>r.reverse());for(let y=0;y<mat.length;y++)for(let x=0;x<y;x++) [mat[x][y],mat[y][x]]=[mat[y][x],mat[x][y]];player.pos.x+=player.pos.x<W/2?-1:1;}}
+function sweep(){let rows=0;outer:for(let y=H-1;y>=0;--y){for(let x=0;x<W;++x)if(!arena[y][x])continue outer;arena.splice(y,1);arena.unshift(Array(W).fill(0));rows++;++y;}if(rows){player.lines+=rows;player.score+=rows*10;player.level=Math.floor(player.lines/4)+1;interval=Math.max(MIN,BASE-(player.level-1)*STEP);}}
+function spawn(){player.matrix=next;next=clone(tpl[rnd()]);player.pos.y=0;player.pos.x=(W>>1)-(player.matrix[0].length>>1);if(collide())gameOver();}
+function reset(){arena.forEach(r=>r.fill(0));Object.assign(player,{score:0,lines:0,level:1});interval=BASE;over=false;document.getElementById('overlay').style.visibility='hidden';spawn();}
+function gameOver(){over=true;document.getElementById('overlay').style.visibility='visible';draw();}
+function drawGrid(){ctx.lineWidth=0.05;ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--grid');for(let y=0;y<H;y++)for(let x=0;x<W;x++)ctx.strokeRect(x,y,1,1);} 
+function drawMat(m,o){m.forEach((r,y)=>r.forEach((v,x)=>{if(v){ctx.fillStyle=COL[v];ctx.fillRect(o.x+x,o.y+y,1,1);ctx.lineWidth=0.06;ctx.strokeStyle='#000';ctx.strokeRect(o.x+x,o.y+y,1,1);}}));}
+function draw(){ctx.fillStyle='#000a14';ctx.fillRect(0,0,cvs.width,cvs.height);drawGrid();drawMat(arena,{x:0,y:0});if(player.matrix)drawMat(player.matrix,player.pos);}
+function loop(t=0){const dt=t-last;last=t;if(!over){drop+=dt;if(drop>(fast?80:interval)){player.pos.y++;if(collide()){player.pos.y--;merge();sweep();spawn();}drop=0;}draw();}requestAnimationFrame(loop);} 
+function move(dir){player.pos.x+=dir;if(collide())player.pos.x-=dir;draw();}
+addEventListener('keydown',e=>{if(e.repeat||over)return;switch(e.code){case'ArrowLeft':move(-1);break;case'ArrowRight':move(1);break;case'ArrowDown':fast=true;break;case'Space':rotate(player.matrix);break;}});
+addEventListener('keyup',e=>{if(e.code==='ArrowDown')fast=false;});
+const btnDown=document.getElementById('btnDown'),btnRot=document.getElementById('btnRot');
+btnDown.addEventListener('pointerdown',()=>{fast=true});['pointerup','pointerleave','pointercancel'].forEach(ev=>btnDown.addEventListener(ev,()=>fast=false)); btnRot.addEventListener('pointerdown',()=>{if(!over)rotate(player.matrix)});
+let startX=null; cvs.addEventListener('touchstart',e=>{if(over)return;startX=e.touches[0].clientX;}); cvs.addEventListener('touchmove',e=>{if(over||startX===null)return;const dx=e.touches[0].clientX-startX;if(Math.abs(dx)>BLK*0.4){move(Math.sign(dx));startX=e.touches[0].clientX;}}); cvs.addEventListener('touchend',e=>{if(over){reset();return;}if(startX!==null){const dx=e.changedTouches[0].clientX-startX;if(Math.abs(dx)<10)rotate(player.matrix);}startX=null;});
+setInterval(()=>{document.getElementById('score').textContent=player.score;document.getElementById('level').textContent=player.level;document.getElementById('lines').textContent=player.lines;},120);
+fit();spawn();loop(); document.getElementById('restart').onclick=reset;
 </script>
 </body>
 </html>
-
