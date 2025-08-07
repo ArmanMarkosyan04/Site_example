@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mini Arcade</title>
+  <style>
+    :root {
+      --bg: #101820;        /* page background */
+      --card: #162232;      /* game card background */
+      --accent: #00b2ff;    /* header + button colour */
+      --text: #e0e6f0;      /* base text colour */
+    }
+    * { box-sizing: border-box; margin: 0; }
+
+    body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; }
+    h1   { text-align: center; padding: 1.2rem 0; color: var(--accent); font-size: 2rem; }
+
+    /* responsive auto‑wrapping grid */
+    .grid {
+      display: grid;
+      gap: 1.2rem;
+      padding: 1rem;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      justify-items: center;            /* center lone cards */
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 3px 12px rgba(0,0,0,.55);
+      width: 100%;               /* stretch inside grid cell */
+      max-width: 480px;          /* but don’t get too huge on 4K */
+    }
+    .card img {
+      width: 100%;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      background: #000;          /* fallback colour */
+    }
+    .card a {
+      display: block;
+      padding: .85rem 0;
+      text-align: center;
+      font-weight: 600;
+      text-decoration: none;
+      color: #fff;
+      background: var(--accent);
+      transition: filter .2s;
+    }
+    .card a:hover { filter: brightness(1.15); }
+  </style>
+</head>
+<body>
+  <h1>Mini Arcade</h1>
+
+  <div class="grid">
+    <!-- ===== TETRIS CARD ===== -->
+    <div class="card">
+      <!-- Replace src with your own screenshot file if available -->
+      <img src="assets/tetris.png" alt="Tetris screenshot" onerror="this.src='https://dummyimage.com/640x360/000/fff&text=Tetris'" />
+      <a href="tetris_canvas.html" target="_blank">Play Tetris</a>
+    </div>
+
+    <!-- ===== TEMPLATE CARD – COPY/PASTE FOR NEW GAME =====
+    <div class="card">
+      <img src="assets/snake.png" alt="Snake screenshot" onerror="this.src='https://dummyimage.com/640x360/000/fff&text=Snake'" />
+      <a href="snake.html" target="_blank">Play Snake</a>
+    </div>
+    ====================================================== -->
+  </div>
+</body>
+</html>
