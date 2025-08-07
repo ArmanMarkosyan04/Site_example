@@ -3,97 +3,102 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tetris Mobile</title>
+  <title>Tetris Mobile</title>
   <style>
     :root {
-      --bg-main:#0f1724; --accent:#00b2ff; --text:#e0e6f0; --grid:#1b2c44;
-      --hud-h:40px;
+      --bg-main:#0f1724;
+      --accent:#00b2ff;
+      --text:#e0e6f0;
+      --grid:#21324b;
+      --hud-h:48px;          /* taller status bar */
+      --btn-size:72px;       /* on‑screen button size */
     }
-    *{box-sizing:border-box;margin:0;user-select:none;-webkit-user-select:none;}
+    *{box-sizing:border-box;margin:0;-webkit-user-select:none;user-select:none;}
     body{height:100vh;background:var(--bg-main);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;color:var(--text);font-family:system-ui,sans-serif;touch-action:manipulation;}
 
-    /* HUD bar */
-    .hud{height:var(--hud-h);width:100%;max-width:600px;display:flex;justify-content:space-around;align-items:center;background:#111d2e;color:var(--accent);font-weight:600;font-size:0.9rem;}
-    .hud span{min-width:70px;text-align:center;}
+    /* ---------- HUD (score / level / lines) ---------- */
+    .hud{height:var(--hud-h);width:100%;max-width:680px;padding:0 .8rem;display:flex;justify-content:space-between;align-items:center;background:#111d2e;box-shadow:0 2px 6px #0008;font-size:1.05rem;font-weight:600;letter-spacing:.3px;}
+    .hud span{flex:1;text-align:center;color:var(--accent);}  /* label colour */
+    .hud strong{color:#fff;font-weight:700;margin-left:.25rem;}
 
-    /* Canvas fills width below HUD */
-    #playfield{flex:1;width:100%;max-width:600px;background:#000a14;border:3px solid #000c18;box-shadow:0 4px 10px #0007;}
+    /* ---------- canvas fills remaining space ---------- */
+    #playfield{flex:1;width:100%;max-width:680px;background:#000a14;border:3px solid #000c18;box-shadow:0 4px 10px #0007;touch-action:none;}
 
-    /* Fast‑drop button (bottom centre) */
-    .fast-btn{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:var(--accent);border:none;border-radius:50%;width:64px;height:64px;color:#fff;font-size:1.6rem;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,.4);}
-    .fast-btn:active{filter:brightness(.9);}  
+    /* ---------- on‑screen buttons ---------- */
+    .ctrl-btn{position:absolute;bottom:16px;border:none;border-radius:50%;width:var(--btn-size);height:var(--btn-size);font-size:1.8rem;font-weight:700;color:#fff;background:var(--accent);box-shadow:0 4px 14px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;}
+    .ctrl-btn:active{filter:brightness(.9);}  
+    #btnDown{left:16px;}   /* fast drop left */
+    #btnRotate{right:16px;} /* rotate right */
   </style>
 </head>
 <body>
   <div class="hud">
-    <span>Score: <strong id="score">0</strong></span>
-    <span>Level: <strong id="level">1</strong></span>
-    <span>Lines: <strong id="lines">0</strong></span>
+    <span>Score<strong id="score">0</strong></span>
+    <span>Level<strong id="level">1</strong></span>
+    <span>Lines<strong id="lines">0</strong></span>
   </div>
+
   <canvas id="playfield"></canvas>
-  <button id="btnDown" class="fast-btn">↓</button>
+
+  <button id="btnDown" class="ctrl-btn">↓</button>
+  <button id="btnRotate" class="ctrl-btn">⟳</button>
 
 <script>
 /***** CONFIG *****/
 const W=12,H=20,COLORS=[null,'#FF7F00','#00C2FF','#19FF6C','#AD0DFF','#FF3B70','#FFE600','#3975FF'];
 const BASE=600,MIN=60,STEP=60;
 
-/***** CANVAS DYNAMIC SIZE *****/
+/***** CANVAS SIZE *****/
 const cvs=document.getElementById('playfield'),ctx=cvs.getContext('2d');
-function resize(){
-  const block=Math.floor(window.innerWidth/W);
-  cvs.width=W*block;
-  cvs.height=H*block;
-  ctx.setTransform(block,0,0,block,0,0);
-  draw();
-}
-window.addEventListener('resize',resize);
+function resize(){const blk=Math.max(Math.floor(innerWidth/W),12); cvs.width=W*blk; cvs.height=H*blk; ctx.setTransform(blk,0,0,blk,0,0); draw();}
+addEventListener('resize',resize);
 
 /***** HELPERS *****/
 const mat=(w,h)=>Array.from({length:h},()=>Array(w).fill(0));
 const rand=()=>"ILJOTSZ"[Math.random()*7|0];
-const pieces={T:[[0,0,0],[1,1,1],[0,1,0]],O:[[2,2],[2,2]],L:[[0,3,0],[0,3,0],[0,3,3]],J:[[0,4,0],[0,4,0],[4,4,0]],I:[[0,5,0,0],[0,5,0,0],[0,5,0,0],[0,5,0,0]],S:[[0,6,6],[6,6,0],[0,0,0]],Z:[[7,7,0],[0,7,7],[0,0,0]]};
+const tmpl={T:[[0,0,0],[1,1,1],[0,1,0]],O:[[2,2],[2,2]],L:[[0,3,0],[0,3,0],[0,3,3]],J:[[0,4,0],[0,4,0],[4,4,0]],I:[[0,5,0,0],[0,5,0,0],[0,5,0,0],[0,5,0,0]],S:[[0,6,6],[6,6,0],[0,0,0]],Z:[[7,7,0],[0,7,7],[0,0,0]]};
 const copy=m=>m.map(r=>[...r]);
 
 /***** GAME STATE *****/
 const arena=mat(W,H);
 const player={pos:{x:0,y:0},matrix:null,score:0,lines:0,level:1};
-let next=copy(pieces[rand()]);
+let next=copy(tmpl[rand()]);
 
-/***** CORE FUNCTIONS *****/
-function collide(){for(let y=0;y<player.matrix.length;y++)for(let x=0;x<player.matrix[y].length;x++)if(player.matrix[y][x]&&(arena[y+player.pos.y]?.[x+player.pos.x]||x+player.pos.x<0||x+player.pos.x>=W||y+player.pos.y>=H))return true;return false;}
+/***** CORE *****/
+function collide(){for(let y=0;y<player.matrix.length;y++)for(let x=0;x<player.matrix[y].length;x++) if(player.matrix[y][x]&&(arena[y+player.pos.y]?.[x+player.pos.x]||x+player.pos.x<0||x+player.pos.x>=W||y+player.pos.y>=H)) return true; return false;}
 function merge(){player.matrix.forEach((r,y)=>r.forEach((v,x)=>{if(v)arena[y+player.pos.y][x+player.pos.x]=v;}));}
-function rot(m){for(let y=0;y<m.length;y++)for(let x=0;x<y;x++)[m[x][y],m[y][x]]=[m[y][x],m[x][y]];m.forEach(r=>r.reverse());if(collide())m.forEach(r=>r.reverse());}
-function sweep(){let rows=0;outer:for(let y=H-1;y>=0;y--){for(let x=0;x<W;x++)if(!arena[y][x])continue outer;arena.splice(y,1);arena.unshift(Array(W).fill(0));rows++;y++;}if(rows){player.score+=rows*10;player.lines+=rows;player.level=Math.floor(player.lines/4)+1;interval=Math.max(MIN,BASE-(player.level-1)*STEP);}}
-function reset(){arena.forEach(r=>r.fill(0));Object.assign(player,{score:0,lines:0,level:1});interval=BASE;}
-function newPiece(){player.matrix=next;next=copy(pieces[rand()]);player.pos.y=0;player.pos.x=(W/2|0)-(player.matrix[0].length/2|0);if(collide())reset();}
+function rotate(m){for(let y=0;y<m.length;y++)for(let x=0;x<y;x++) [m[x][y],m[y][x]]=[m[y][x],m[x][y]]; m.forEach(r=>r.reverse()); if(collide()){m.forEach(r=>r.reverse());}}
+function sweep(){let rows=0;outer:for(let y=H-1;y>=0;--y){for(let x=0;x<W;++x) if(!arena[y][x]) continue outer; arena.splice(y,1); arena.unshift(Array(W).fill(0)); rows++; ++y;} if(rows){player.lines+=rows;player.score+=rows*10;player.level=Math.floor(player.lines/4)+1; interval=Math.max(MIN,BASE-(player.level-1)*STEP);} }
+function reset(){arena.forEach(r=>r.fill(0)); Object.assign(player,{score:0,lines:0,level:1}); interval=BASE; }
+function newPiece(){player.matrix=next; next=copy(tmpl[rand()]); player.pos.y=0; player.pos.x=(W/2|0)-(player.matrix[0].length/2|0); if(collide()) reset();}
 
 /***** DRAW *****/
-function drawMat(m,{x:ox,y:oy}){m.forEach((r,y)=>r.forEach((v,x)=>{if(v){ctx.fillStyle=COLORS[v];ctx.fillRect(x+ox,y+oy,1,1);ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--grid');ctx.lineWidth=0.06;ctx.strokeRect(x+ox,y+oy,1,1);}}));}
-function draw(){ctx.fillStyle='#000a14';ctx.fillRect(0,0,cvs.width,cvs.height);drawMat(arena,{x:0,y:0});drawMat(player.matrix,player.pos);} 
+function drawMat(m,{x:ox,y:oy}){m.forEach((r,y)=>r.forEach((v,x)=>{if(v){ctx.fillStyle=COLORS[v]; ctx.fillRect(x+ox,y+oy,1,1); ctx.lineWidth=0.06; ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--grid'); ctx.strokeRect(x+ox,y+oy,1,1);} }));}
+function draw(){ctx.fillStyle='#000a14';ctx.fillRect(0,0,cvs.width,cvs.height); drawMat(arena,{x:0,y:0}); if(player.matrix) drawMat(player.matrix,player.pos);}  
 
 /***** GAME LOOP *****/
 let dropCounter=0,last=0,interval=BASE,fast=false,paused=false;
-function loop(t=0){const dt=t-last;last=t;dropCounter+=dt;if(!paused&&(fast?dropCounter>70:dropCounter>interval)){player.pos.y++;if(collide()){player.pos.y--;merge();sweep();newPiece();}dropCounter=0;}draw();requestAnimationFrame(loop);} 
+function loop(t=0){const dt=t-last; last=t; dropCounter+=dt; if(!paused && (fast?dropCounter>70:dropCounter>interval)){ player.pos.y++; if(collide()){ player.pos.y--; merge(); sweep(); newPiece(); } dropCounter=0; } draw(); requestAnimationFrame(loop);}  
 
-/***** INPUT: KEY + TOUCH *****/
-addEventListener('keydown',e=>{if(e.repeat)return;switch(e.code){case'ArrowLeft':player.pos.x--;if(collide())player.pos.x++;break;case'ArrowRight':player.pos.x++;if(collide())player.pos.x--;break;case'ArrowDown':fast=true;break;case'Space':rot(player.matrix);break;case'KeyP':paused=!paused;}});
-addEventListener('keyup',e=>{if(e.code==='ArrowDown')fast=false;});
+/***** INPUT *****/
+addEventListener('keydown',e=>{if(e.repeat)return; switch(e.code){ case'ArrowLeft': player.pos.x--; if(collide()) player.pos.x++; break; case'ArrowRight': player.pos.x++; if(collide()) player.pos.x--; break; case'ArrowDown': fast=true; break; case'Space': rotate(player.matrix); break; case'KeyP': paused=!paused; }});
+addEventListener('keyup',e=>{ if(e.code==='ArrowDown') fast=false; });
 
-// swipe gestures on canvas
-let sx=0; cvs.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;});
-cvs.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-sx;if(Math.abs(dx)>30){dx>0?player.pos.x++:player.pos.x--;if(collide())dx>0?player.pos.x--:player.pos.x++;}else{rot(player.matrix);} });
+/* swipe left/right + tap rotate */
+let startX=0,startY=0; cvs.addEventListener('touchstart',e=>{const t=e.touches[0]; startX=t.clientX; startY=t.clientY;});
+cvs.addEventListener('touchend',e=>{const t=e.changedTouches[0]; const dx=t.clientX-startX, dy=t.clientY-startY; if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>30){ dx>0?player.pos.x++:player.pos.x--; if(collide()) dx>0?player.pos.x--:player.pos.x++; } else if(Math.abs(dy)<20){ rotate(player.matrix);} });
 
-// fast‑drop button
-const btn=document.getElementById('btnDown');
-btn.addEventListener('pointerdown',()=>fast=true);
-['pointerup','pointercancel','pointerleave'].forEach(ev=>btn.addEventListener(ev,()=>fast=false));
+/* on‑screen buttons */
+const btnDown=document.getElementById('btnDown'), btnRot=document.getElementById('btnRotate');
+btnDown.addEventListener('pointerdown',()=>fast=true);
+['pointerup','pointercancel','pointerleave'].forEach(ev=>btnDown.addEventListener(ev,()=>fast=false));
+btnRot.addEventListener('pointerdown',()=>rotate(player.matrix));
 
-/***** HUD UPDATE *****/
-setInterval(()=>{document.getElementById('score').textContent=player.score;document.getElementById('level').textContent=player.level;document.getElementById('lines').textContent=player.lines;},120);
+/***** HUD refresh *****/
+setInterval(()=>{document.getElementById('score').textContent=player.score; document.getElementById('level').textContent=player.level; document.getElementById('lines').textContent=player.lines;},120);
 
 /***** INIT *****/
-resize();newPiece();loop();
+resize(); newPiece(); loop();
 </script>
 </body>
 </html>
